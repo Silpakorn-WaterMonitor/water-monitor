@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Level Analytics - History Data</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0d1117; color: #c9d1d9; margin: 0; padding: 25px; }
+        .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
+        .title h2 { margin: 0; color: #58a6ff; font-size: 22px; }
+        .title p { margin: 5px 0 0; color: #8b949e; font-size: 13px; }
+        
+        .filter-group { display: flex; align-items: center; gap: 10px; }
+        input.custom-date { background: #161b22; color: #58a6ff; border: 1px solid #30363d; padding: 8px 14px; border-radius: 8px; outline: none; cursor: pointer; font-size: 14px; text-align: center; width: 140px; }
+
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px; }
+        .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; text-align: center; }
+        .stat-label { color: #8b949e; font-size: 14px; margin-bottom: 8px; }
+        .stat-val { font-size: 32px; font-weight: bold; }
+        .max-color { color: #58a6ff; }
+        .min-color { color: #3fb950; }
+        .avg-color { color: #d29922; }
+
+        .chart-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
+        .back-btn { text-decoration: none; color: #8b949e; display: inline-block; margin-bottom: 15px; font-size: 14px; }
+        .back-btn:hover { color: #58a6ff; }
+
+        /* คำอธิบายสัญลักษณ์โซนสี */
+        .legend-box { display: flex; justify-content: center; gap: 20px; margin-top: 15px; font-size: 13px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+        .dot-green { background: rgba(63, 185, 80, 0.4); border: 1px solid #3fb950; }
+        .dot-yellow { background: rgba(210, 153, 34, 0.4); border: 1px solid #d29922; }
+        .dot-red { background: rgba(248, 81, 73, 0.4); border: 1px solid #f85149; }
+    </style>
+</head>
+<body>
+
+    <a href="index.html" class="back-btn">← กลับหน้าหลัก</a>
+
+    <div class="header-box">
+        <div class="title">
+            <h2>📊 ประวัติวิเคราะห์ระดับน้ำย้อนหลัง (History Analytics)</h2>
+            <p>คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม ม.ศิลปากร</p>
+        </div>
+        <div class="filter-group">
+            <label for="selectDate" style="color: #8b949e; font-size: 14px;">เลือกวันที่ต้องการดู:</label>
+            <input type="text" id="selectDate" class="custom-date" placeholder="วัน/เดือน/ปี">
+        </div>
+    </div>
+
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-label">ระดับน้ำสูงสุด (Max)</div>
+            <div class="stat-val max-color"><span id="maxVal">0.00</span> ซม.</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">ระดับน้ำต่ำสุด (Min)</div>
+            <div class="stat-val min-color"><span id="minVal">0.00</span> ซม.</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">ค่าเฉลี่ย (Average)</div>
+            <div class="stat-val avg-color"><span id="avgVal">0.00</span> ซม.</div>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <canvas id="historyChart" height="110"></canvas>
+        <div class="legend-box">
+            <div class="legend-item"><span class="dot dot-green"></span> ปกติ (0 - 55 ซม.)</div>
+            <div class="legend-item"><span class="dot dot-yellow"></span> เฝ้าระวัง (56 - 65 ซม.)</div>
+            <div class="legend-item"><span class="dot dot-red"></span> สูงเกินเกณฑ์ (66+ ซม.)</div>
+        </div>
+    </div>
+
+    <script>
+        const CHANNEL_ID = '3453778';
+        let histChart;
+
+        // Plugin วาดแถบสีแบ่งโซน: 0-55 / 55-65 / 65+
+        const zoneBackgroundPlugin = {
+            id: 'zoneBackground',
+            beforeDraw(chart) {
+                const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
+                if (!top) return;
+
+                ctx.save();
+                
+                // คำนวณพิกัด Y ของระดับ 65 และ 55
+                const y65 = y.getPixelForValue(65);
+                const y55 = y.getPixelForValue(55);
+
+                // โซนแดง (สูงเกินเกณฑ์: 65 - 75 ซม.)
+                ctx.fillStyle = 'rgba(248, 81, 73, 0.15)';
+                ctx.fillRect(left, top, right - left, y65 - top);
+
+                // โซนเหลือง (เฝ้าระวัง: 55 - 65 ซม.)
+                ctx.fillStyle = 'rgba(210, 153, 34, 0.15)';
+                ctx.fillRect(left, y65, right - left, y55 - y65);
+
+                // โซนเขียว (ปกติ: 0 - 55 ซม.)
+                ctx.fillStyle = 'rgba(63, 185, 80, 0.15)';
+                ctx.fillRect(left, y55, right - left, bottom - y55);
+
+                ctx.restore();
+            }
+        };
+
+        function initChart() {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            histChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'ระดับน้ำ (ซม.)',
+                        data: [],
+                        borderColor: '#58a6ff',
+                        borderWidth: 2.5,
+                        fill: false,
+                        pointRadius: 1,
+                        pointHoverRadius: 6,
+                        spanGaps: false
+                    }]
+                },
+                plugins: [zoneBackgroundPlugin],
+                options: {
+                    responsive: true,
+                    animation: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: { 
+                            min: 0, 
+                            max: 75, 
+                            grid: { color: '#21262d' }, 
+                            ticks: { color: '#8b949e' } 
+                        },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#8b949e', maxTicksLimit: 12, maxRotation: 0 } 
+                        }
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y;
+                                    let status = ' (ปกติ)';
+                                    if (val >= 66) status = ' 🚨 (สูงเกินเกณฑ์)';
+                                    else if (val >= 56) status = ' ⚠️ (เฝ้าระวัง)';
+                                    return val !== null ? `ระดับน้ำ: ${val} ซม.${status}` : 'ไม่มีข้อมูล (ปิดเครื่อง)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function fetchHistoryByDate(dateStr) {
+            if (!dateStr) return;
+
+            const startStr = `${dateStr}%2000:00:00`;
+            const endStr = `${dateStr}%2023:59:59`;
+
+            try {
+                const res = await fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/1.json?start=${startStr}&end=${endStr}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const feeds = data.feeds;
+
+                if (feeds && feeds.length > 0) {
+                    const vals = feeds.map(f => f.field1 !== null ? parseFloat(f.field1) : 0);
+                    
+                    document.getElementById('maxVal').innerText = Math.max(...vals).toFixed(2);
+                    document.getElementById('minVal').innerText = Math.min(...vals).toFixed(2);
+                    document.getElementById('avgVal').innerText = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+
+                    histChart.data.labels = feeds.map(f => new Date(f.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }));
+                    histChart.data.datasets[0].data = vals;
+                    histChart.update();
+                } else {
+                    document.getElementById('maxVal').innerText = '0.00';
+                    document.getElementById('minVal').innerText = '0.00';
+                    document.getElementById('avgVal').innerText = '0.00';
+                    histChart.data.labels = [];
+                    histChart.data.datasets[0].data = [];
+                    histChart.update();
+                }
+            } catch (err) {
+                console.error("Fetch history error:", err);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            initChart();
+
+            flatpickr("#selectDate", {
+                dateFormat: "d/m/Y",
+                defaultDate: new Date(),
+                locale: "th",
+                onChange: function(selectedDates) {
+                    if (selectedDates.length > 0) {
+                        const d = selectedDates[0];
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        fetchHistoryByDate(`${year}-${month}-${day}`);
+                    }
+                }
+            });
+
+            const now = new Date();
+            fetchHistoryByDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+        });
+    </script>
+</body>
+</html>

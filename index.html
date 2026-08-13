@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบมอนิเตอร์ระดับน้ำในบ่อแบบเรียลไทม์</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f4f8; margin: 0; padding: 20px; }
+        .header { text-align: center; background: white; padding: 20px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .header h1 { margin: 0; font-size: 24px; color: #1a202c; }
+        .header p { margin: 5px 0 0; color: #718096; font-size: 14px; }
+        
+        .main-card { background: white; padding: 25px; border-radius: 16px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .val-title { color: #718096; font-size: 16px; font-weight: 600; }
+        .val-number { font-size: 56px; font-weight: bold; color: #0077cc; margin: 10px 0; }
+        .val-unit { font-size: 24px; color: #0077cc; }
+        .val-sub { color: #a0aec0; font-size: 13px; }
+
+        .grid-3 { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 900px) { .grid-3 { grid-template-columns: 1fr; } }
+        
+        .card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card-title { font-weight: bold; color: #2d3748; margin-bottom: 15px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+
+        .table-hist { width: 100%; border-collapse: collapse; }
+        .table-hist th, .table-hist td { padding: 8px; text-align: center; font-size: 14px; }
+        .table-hist th { color: #a0aec0; font-weight: normal; }
+        .table-hist td { color: #0077cc; font-weight: bold; }
+
+        .tank-container { width: 100px; height: 180px; border: 3px solid #0077cc; border-radius: 0 0 16px 16px; margin: 0 auto; position: relative; background: #e6f3ff; overflow: hidden; }
+        .water-fill { position: absolute; bottom: 0; width: 100%; background: #0088e6; transition: height 0.3s ease; }
+        .tank-text { position: absolute; top: 50%; width: 100%; text-align: center; font-weight: bold; font-size: 14px; color: #003366; transform: translateY(-50%); z-index: 2; }
+
+        .btn-container { text-align: center; margin-top: 10px; }
+        .btn-history { background: #0088e6; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 10px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn-history:hover { background: #0066b3; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>ระบบวัดระดับน้ำบ่อจำลอง (เรียลไทม์)</h1>
+        <p>คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม ม.ศิลปากร</p>
+    </div>
+
+    <div class="main-card">
+        <div class="val-title">ระดับน้ำปัจจุบัน</div>
+        <div class="val-number"><span id="liveWaterLevel">--.--</span> <span class="val-unit">ซม.</span></div>
+        <div class="val-sub">(ระดับน้ำวิกฤตต้องเปิดระบาย: 70.00 ซม.)</div>
+    </div>
+
+    <div class="grid-3">
+        <div class="card">
+            <div class="card-title">📜 ประวัติการวัดค่า</div>
+            <table class="table-hist">
+                <thead><tr><th>เวลา</th><th>ระดับน้ำ</th></tr></thead>
+                <tbody id="tableBody"><tr><td colspan="2">กำลังโหลด...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📈 แนวโน้มระดับน้ำ</div>
+            <canvas id="lineChart" height="150"></canvas>
+        </div>
+
+        <div class="card" style="text-align: center;">
+            <div class="card-title" style="justify-content: center;">🌊 ระดับน้ำจำลอง</div>
+            <div class="tank-container">
+                <div class="water-fill" id="tankFill" style="height: 0%;"></div>
+                <div class="tank-text" id="tankText">0.00<br>ซม.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="btn-container">
+        <a href="history.html" class="btn-history">📊 ประวัติข้อมูล </a>
+    </div>
+
+    <script>
+        const CHANNEL_ID = '3453778';
+        let chart;
+        let isFetching = false; // ป้องกันการยิงซ้ำซ้อนจนเว็บหน่วง
+
+        function initChart() {
+            const ctx = document.getElementById('lineChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'ระดับน้ำ (ซม.)',
+                        data: [],
+                        borderColor: '#0088e6',
+                        backgroundColor: 'rgba(0, 136, 230, 0.1)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false, // ปิด Animation ชาร์ต เพื่อลดภาระเครื่อง ป้องกันการหน่วง
+                    scales: { y: { min: 0, max: 75 } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function fetchData() {
+            if (isFetching) return; // ถ้ารอบก่อนหน้ายังไม่เสร็จ ให้ข้าม เพื่อไม่ให้แรมค้าง
+            isFetching = true;
+
+            // ใส่ timestamp ต่อท้าย URL ป้องกันปัญหาการเก็บ Cache ของเบราว์เซอร์
+            fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/1.json?results=8&_=${Date.now()}`)
+                .then(res => res.json())
+                .then(data => {
+                    const feeds = data.feeds;
+                    if (feeds && feeds.length > 0) {
+                        const latest = feeds[feeds.length - 1];
+                        const val = parseFloat(latest.field1 || 0).toFixed(2);
+                        
+                        // อัปเดตตัวเลขสด
+                        document.getElementById('liveWaterLevel').innerText = val;
+                        document.getElementById('tankText').innerHTML = `${val}<br>ซม.`;
+                        
+                        // อัปเดตกราฟจำลองถังน้ำ
+                        let pct = (val / 70) * 100;
+                        if (pct > 100) pct = 100;
+                        document.getElementById('tankFill').style.height = `${pct}%`;
+
+                        // อัปเดตตารางประวัติ
+                        let html = '';
+                        feeds.slice().reverse().forEach(f => {
+                            const t = new Date(f.created_at).toLocaleTimeString('th-TH');
+                            const v = parseFloat(f.field1 || 0).toFixed(2);
+                            html += `<tr><td>${t}</td><td>${v} ซม.</td></tr>`;
+                        });
+                        document.getElementById('tableBody').innerHTML = html;
+
+                        // อัปเดตกราฟเส้น
+                        chart.data.labels = feeds.map(f => new Date(f.created_at).toLocaleTimeString('th-TH'));
+                        chart.data.datasets[0].data = feeds.map(f => parseFloat(f.field1 || 0));
+                        chart.update();
+                    }
+                })
+                .catch(err => console.error("Error:", err))
+                .finally(() => {
+                    isFetching = false;
+                });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            initChart();
+            fetchData();
+            setInterval(fetchData, 3000); // ⚡ เช็กค่าน้ำใหม่ทุกๆ 3 วินาที (ตอบสนองไวขึ้นทันตา)
+        });
+    </script>
+</body>
+</html>
