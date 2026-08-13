@@ -48,7 +48,7 @@
     <div class="main-card">
         <div class="val-title">ระดับน้ำปัจจุบัน</div>
         <div class="val-number"><span id="liveWaterLevel">--.--</span> <span class="val-unit">ซม.</span></div>
-        <div class="val-sub">(ระดับน้ำวิกฤตต้องเปิดระบาย: 70.00 ซม.)</div>
+        <div class="val-sub">(ระดับน้ำวิกฤตต้องเปิดระบาย: 66.00 ซม.)</div>
     </div>
 
     <div class="grid-3">
@@ -75,13 +75,13 @@
     </div>
 
     <div class="btn-container">
-        <a href="history.html" class="btn-history">📊 ประวัติข้อมูล </a>
+        <a href="history.html" class="btn-history">📊 ดูประวัติย้อนหลัง (จอใหญ่)</a>
     </div>
 
     <script>
         const CHANNEL_ID = '3453778';
         let chart;
-        let isFetching = false; // ป้องกันการยิงซ้ำซ้อนจนเว็บหน่วง
+        let isFetching = false;
 
         function initChart() {
             const ctx = document.getElementById('lineChart').getContext('2d');
@@ -101,7 +101,7 @@
                 },
                 options: {
                     responsive: true,
-                    animation: false, // ปิด Animation ชาร์ต เพื่อลดภาระเครื่อง ป้องกันการหน่วง
+                    animation: false,
                     scales: { y: { min: 0, max: 75 } },
                     plugins: { legend: { display: false } }
                 }
@@ -109,10 +109,9 @@
         }
 
         function fetchData() {
-            if (isFetching) return; // ถ้ารอบก่อนหน้ายังไม่เสร็จ ให้ข้าม เพื่อไม่ให้แรมค้าง
+            if (isFetching) return;
             isFetching = true;
 
-            // ใส่ timestamp ต่อท้าย URL ป้องกันปัญหาการเก็บ Cache ของเบราว์เซอร์
             fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/1.json?results=8&_=${Date.now()}`)
                 .then(res => res.json())
                 .then(data => {
@@ -121,26 +120,22 @@
                         const latest = feeds[feeds.length - 1];
                         const val = parseFloat(latest.field1 || 0).toFixed(2);
                         
-                        // อัปเดตตัวเลขสด
                         document.getElementById('liveWaterLevel').innerText = val;
                         document.getElementById('tankText').innerHTML = `${val}<br>ซม.`;
                         
-                        // อัปเดตกราฟจำลองถังน้ำ
                         let pct = (val / 70) * 100;
                         if (pct > 100) pct = 100;
                         document.getElementById('tankFill').style.height = `${pct}%`;
 
-                        // อัปเดตตารางประวัติ
                         let html = '';
                         feeds.slice().reverse().forEach(f => {
-                            const t = new Date(f.created_at).toLocaleTimeString('th-TH');
+                            const t = new Date(f.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
                             const v = parseFloat(f.field1 || 0).toFixed(2);
                             html += `<tr><td>${t}</td><td>${v} ซม.</td></tr>`;
                         });
                         document.getElementById('tableBody').innerHTML = html;
 
-                        // อัปเดตกราฟเส้น
-                        chart.data.labels = feeds.map(f => new Date(f.created_at).toLocaleTimeString('th-TH'));
+                        chart.data.labels = feeds.map(f => new Date(f.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }));
                         chart.data.datasets[0].data = feeds.map(f => parseFloat(f.field1 || 0));
                         chart.update();
                     }
@@ -154,7 +149,8 @@
         document.addEventListener("DOMContentLoaded", () => {
             initChart();
             fetchData();
-            setInterval(fetchData, 3000); // ⚡ เช็กค่าน้ำใหม่ทุกๆ 3 วินาที (ตอบสนองไวขึ้นทันตา)
+            // ⚡ ปรับเป็นรีเฟรชข้อมูลทุกๆ 1 นาที (60,000ms)
+            setInterval(fetchData, 60000); 
         });
     </script>
 </body>
