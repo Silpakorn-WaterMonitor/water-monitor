@@ -12,7 +12,8 @@
         .header h1 { margin: 0; font-size: 24px; color: #1a202c; }
         .header p { margin: 5px 0 0; color: #718096; font-size: 14px; }
         
-        .main-card { background: white; padding: 25px; border-radius: 16px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .main-card { background: white; padding: 25px; border-radius: 16px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: border 0.2s ease; }
+        .main-card.hover-mode { border: 2px solid #0077cc; }
         .val-title { color: #718096; font-size: 16px; font-weight: 600; }
         .val-number { font-size: 56px; font-weight: bold; color: #0077cc; margin: 10px 0; }
         .val-unit { font-size: 24px; color: #0077cc; }
@@ -45,23 +46,23 @@
         <p>คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม ม.ศิลปากร</p>
     </div>
 
-    <div class="main-card">
-        <div class="val-title">ระดับน้ำปัจจุบัน</div>
-        <div class="val-number"><span id="liveWaterLevel">--.--</span> <span class="val-unit">ซม.</span></div>
-        <div class="val-sub">(ระดับน้ำวิกฤตต้องเปิดระบาย: 66.00 ซม.)</div>
+    <div class="main-card" id="mainDisplayCard">
+        <div class="val-title" id="displayLabel">ระดับน้ำปัจจุบัน (ล่าสุด)</div>
+        <div class="val-number"><span id="liveWaterLevel">--.--</span> <span class="val-unit" id="unitText">ซม.</span></div>
+        <div class="val-sub" id="statusSubText">(ระดับน้ำวิกฤตต้องเปิดระบาย: 66.00 ซม.)</div>
     </div>
 
     <div class="grid-3">
         <div class="card">
-            <div class="card-title">📜 ประวัติการวัดค่า</div>
+            <div class="card-title">📜 เฉลี่ยรายชั่วโมง (8 ชม. ล่าสุด)</div>
             <table class="table-hist">
-                <thead><tr><th>เวลา</th><th>ระดับน้ำ</th></tr></thead>
+                <thead><tr><th>ชั่วโมง</th><th>ค่าเฉลี่ย</th></tr></thead>
                 <tbody id="tableBody"><tr><td colspan="2">กำลังโหลด...</td></tr></tbody>
             </table>
         </div>
 
         <div class="card">
-            <div class="card-title">📈 แนวโน้มระดับน้ำ</div>
+            <div class="card-title">📈 แนวโน้มระดับน้ำ (เฉลี่ยรายชั่วโมง)</div>
             <canvas id="lineChart" height="150"></canvas>
         </div>
 
@@ -75,13 +76,14 @@
     </div>
 
     <div class="btn-container">
-        <a href="history.html" class="btn-history">📊 ดูประวัติย้อนหลัง (จอใหญ่)</a>
+        <a href="history.html" class="btn-history">📊 ประวัติย้อนหลัง </a>
     </div>
 
     <script>
         const CHANNEL_ID = '3453778';
         let chart;
         let isFetching = false;
+        let latestRealtimeVal = '--.--';
 
         function initChart() {
             const ctx = document.getElementById('lineChart').getContext('2d');
@@ -90,21 +92,61 @@
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'ระดับน้ำ (ซม.)',
+                        label: 'ระดับน้ำเฉลี่ย (ซม.)',
                         data: [],
                         borderColor: '#0088e6',
                         backgroundColor: 'rgba(0, 136, 230, 0.1)',
                         fill: true,
-                        tension: 0.2,
-                        pointRadius: 2
+                        tension: 0.25,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        pointHoverBackgroundColor: '#0077cc'
                     }]
                 },
                 options: {
                     responsive: true,
                     animation: false,
-                    scales: { y: { min: 0, max: 75 } },
-                    plugins: { legend: { display: false } }
+                    interaction: { mode: 'index', intersect: false },
+                    onHover: (event, chartElements) => {
+                        // เมื่อเอาเมาส์ชี้จุดบนกราฟ จะเอาค่าชั่วโมงนั้นไปโชว์ที่การ์ดใหญ่ด้านบน
+                        if (chartElements && chartElements.length > 0) {
+                            const index = chartElements[0].index;
+                            const hourLabel = chart.data.labels[index];
+                            const val = chart.data.datasets[0].data[index];
+
+                            document.getElementById('mainDisplayCard').classList.add('hover-mode');
+                            document.getElementById('displayLabel').innerText = `ระดับน้ำเฉลี่ยช่วงเวลา ${hourLabel} น.`;
+                            
+                            if (val !== null && val !== undefined) {
+                                document.getElementById('liveWaterLevel').innerText = Number(val).toFixed(2);
+                                let status = 'ปกติ';
+                                if (val >= 66) status = '🚨 สูงเกินเกณฑ์ (วิกฤต)';
+                                else if (val >= 56) status = '⚠️ เฝ้าระวัง';
+                                document.getElementById('statusSubText').innerText = `สถานะช่วงเวลานี้: ${status}`;
+                            }
+                        }
+                    },
+                    scales: { 
+                        y: { min: 0, max: 75 },
+                        x: { ticks: { maxRotation: 0 } }
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => ` ระดับน้ำเฉลี่ย: ${context.parsed.y.toFixed(2)} ซม.`
+                            }
+                        }
+                    }
                 }
+            });
+
+            // เมื่อเลื่อนเมาส์ออกจากกราฟ ให้คืนค่าหน้าจอเป็นการ์ดสถานะเรียลไทม์ล่าสุด
+            document.getElementById('lineChart').addEventListener('mouseleave', () => {
+                document.getElementById('mainDisplayCard').classList.remove('hover-mode');
+                document.getElementById('displayLabel').innerText = 'ระดับน้ำปัจจุบัน (ล่าสุด)';
+                document.getElementById('liveWaterLevel').innerText = latestRealtimeVal;
+                document.getElementById('statusSubText').innerText = '(ระดับน้ำวิกฤตต้องเปิดระบาย: 66.00 ซม.)';
             });
         }
 
@@ -112,35 +154,60 @@
             if (isFetching) return;
             isFetching = true;
 
-            fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/1.json?results=8&_=${Date.now()}`)
+            // ดึง 800 จุดล่าสุดเพื่อให้ครอบคลุมข้อมูลรายชั่วโมง
+            fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/1.json?results=800&_=${Date.now()}`)
                 .then(res => res.json())
                 .then(data => {
                     const feeds = data.feeds;
                     if (feeds && feeds.length > 0) {
+                        // 1. อัปเดตค่าน้ำสดล่าสุด
                         const latest = feeds[feeds.length - 1];
-                        const val = parseFloat(latest.field1 || 0).toFixed(2);
+                        latestRealtimeVal = parseFloat(latest.field1 || 0).toFixed(2);
                         
-                        document.getElementById('liveWaterLevel').innerText = val;
-                        document.getElementById('tankText').innerHTML = `${val}<br>ซม.`;
+                        if (!document.getElementById('mainDisplayCard').classList.contains('hover-mode')) {
+                            document.getElementById('liveWaterLevel').innerText = latestRealtimeVal;
+                        }
                         
-                        let pct = (val / 70) * 100;
+                        document.getElementById('tankText').innerHTML = `${latestRealtimeVal}<br>ซม.`;
+                        let pct = (latestRealtimeVal / 70) * 100;
                         if (pct > 100) pct = 100;
                         document.getElementById('tankFill').style.height = `${pct}%`;
 
-                        let html = '';
-                        feeds.slice().reverse().forEach(f => {
-                            const t = new Date(f.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-                            const v = parseFloat(f.field1 || 0).toFixed(2);
-                            html += `<tr><td>${t}</td><td>${v} ซม.</td></tr>`;
+                        // 2. จัดกลุ่มข้อมูลตามชั่วโมง (Group by Date + Hour)
+                        const hourlyMap = new Map();
+                        feeds.forEach(f => {
+                            if (f.field1 !== null && f.field1 !== "") {
+                                const d = new Date(f.created_at);
+                                const hourKey = `${String(d.getHours()).padStart(2, '0')}:00`;
+                                if (!hourlyMap.has(hourKey)) {
+                                    hourlyMap.set(hourKey, []);
+                                }
+                                hourlyMap.get(hourKey).push(parseFloat(f.field1));
+                            }
                         });
+
+                        // ดึง 8 ชั่วโมงล่าสุด
+                        const recentHours = Array.from(hourlyMap.keys()).slice(-8);
+                        const hourlyAverages = recentHours.map(hour => {
+                            const values = hourlyMap.get(hour);
+                            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+                            return parseFloat(avg.toFixed(2));
+                        });
+
+                        // 3. แสดงในตารางประวัติ 8 ชั่วโมงล่าสุด
+                        let html = '';
+                        for (let i = recentHours.length - 1; i >= 0; i--) {
+                            html += `<tr><td>${recentHours[i]} น.</td><td>${hourlyAverages[i].toFixed(2)} ซม.</td></tr>`;
+                        }
                         document.getElementById('tableBody').innerHTML = html;
 
-                        chart.data.labels = feeds.map(f => new Date(f.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }));
-                        chart.data.datasets[0].data = feeds.map(f => parseFloat(f.field1 || 0));
+                        // 4. อัปเดตกราฟเส้น
+                        chart.data.labels = recentHours;
+                        chart.data.datasets[0].data = hourlyAverages;
                         chart.update();
                     }
                 })
-                .catch(err => console.error("Error:", err))
+                .catch(err => console.error("Error fetching data:", err))
                 .finally(() => {
                     isFetching = false;
                 });
@@ -149,8 +216,8 @@
         document.addEventListener("DOMContentLoaded", () => {
             initChart();
             fetchData();
-            // ⚡ ปรับเป็นรีเฟรชข้อมูลทุกๆ 1 นาที (60,000ms)
-            setInterval(fetchData, 60000); 
+            // รีเฟรชข้อมูลทุก 1 นาที
+            setInterval(fetchData, 60000);
         });
     </script>
 </body>
