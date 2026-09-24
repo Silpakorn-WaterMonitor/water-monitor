@@ -26,7 +26,6 @@
         }
         .container { max-width: 1100px; margin: 0 auto; }
 
-        /* แถบนำทางด้านบน (ปุ่มย้อนกลับ + ปุ่มไปหน้ารายงาน) */
         .top-nav {
             display: flex;
             justify-content: space-between;
@@ -42,7 +41,7 @@
             display: inline-flex; 
             align-items: center; 
             gap: 6px; 
-            font-size: 14.5px; 
+            font-size: 15px; 
             font-weight: 400; 
             transition: all 0.2s ease; 
         }
@@ -53,9 +52,9 @@
             background: #ebf8ff;
             color: #2b6cb0;
             border: 1.5px solid #bee3f8;
-            padding: 7px 16px;
+            padding: 8px 18px;
             border-radius: 12px;
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 500;
             display: inline-flex;
             align-items: center;
@@ -86,19 +85,19 @@
         .title h2 { 
             margin: 0; 
             color: #2b6cb0; 
-            font-size: 22px; 
-            font-weight: 500; 
+            font-size: 26px; 
+            font-weight: 600; 
             letter-spacing: 0.3px;
         }
         .title p { 
             margin: 4px 0 0; 
-            color: #a0aec0; 
-            font-size: 14px; 
-            font-weight: 300; 
+            color: #718096; 
+            font-size: 15px; 
+            font-weight: 400; 
         }
 
         .filter-group { display: flex; align-items: center; gap: 10px; }
-        .filter-label { color: #4a5568; font-size: 15px; font-weight: 400; }
+        .filter-label { color: #4a5568; font-size: 16px; font-weight: 500; }
         input.custom-date { 
             background: #f0f7ff; 
             color: #2b6cb0; 
@@ -107,10 +106,10 @@
             border-radius: 12px; 
             outline: none; 
             cursor: pointer; 
-            font-size: 15px; 
+            font-size: 16px; 
             font-weight: 500; 
             text-align: center; 
-            width: 155px; 
+            width: 165px; 
             transition: all 0.2s;
         }
         input.custom-date:focus { border-color: #3182ce; box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15); }
@@ -122,7 +121,7 @@
             background: #ffffff; 
             border: 1.5px solid #edf2f7; 
             border-radius: 18px; 
-            padding: 18px 16px; 
+            padding: 20px 16px; 
             text-align: center; 
             box-shadow: 0 2px 8px rgba(0,0,0,0.02); 
             transition: all 0.25s ease; 
@@ -133,10 +132,19 @@
             transform: translateY(-2px); 
         }
 
-        .stat-label { color: #718096; font-size: 13.5px; margin-bottom: 6px; font-weight: 400; }
-        .stat-val { font-size: 26px; font-weight: 500; color: #2d3748; }
+        .stat-label { 
+            color: #4a5568; 
+            font-size: 16px; 
+            margin-bottom: 8px; 
+            font-weight: 500; 
+        }
+        .stat-val { 
+            font-size: 32px; 
+            font-weight: 600; 
+            color: #2d3748; 
+        }
 
-        .val-focus { color: #3182ce; }
+        .val-focus { color: #2b6cb0; }
         .val-max { color: #e53e3e; }
         .val-avg { color: #d69e2e; }
 
@@ -147,11 +155,11 @@
             box-shadow: 0 4px 16px rgba(0,0,0,0.03); 
             border: 1.5px solid #edf2f7; 
         }
-        .chart-container { position: relative; width: 100%; height: 360px; }
+        .chart-container { position: relative; width: 100%; height: 380px; }
 
-        .legend-box { display: flex; justify-content: center; gap: 24px; margin-top: 20px; font-size: 13.5px; color: #4a5568; flex-wrap: wrap; }
-        .legend-item { display: flex; align-items: center; gap: 8px; font-weight: 300; }
-        .dot { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+        .legend-box { display: flex; justify-content: center; gap: 24px; margin-top: 20px; font-size: 15px; color: #4a5568; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+        .dot { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
         .dot-green { background: #e6fffa; border: 1.5px solid #319795; }
         .dot-yellow { background: #fffaf0; border: 1.5px solid #dd6b20; }
         .dot-red { background: #fff5f5; border: 1.5px solid #e53e3e; }
@@ -160,7 +168,6 @@
 <body>
 
 <div class="container">
-    <!-- แถบนำทางด้านบน -->
     <div class="top-nav">
         <a href="index.html" class="back-btn">← กลับไปยังหน้าแดชบอร์ดหลัก</a>
         <a href="report.html" class="report-btn">📄 สรุปรายงานรายเดือน / ส่งออก PDF →</a>
@@ -184,15 +191,15 @@
         </div>
         <div class="stat-card">
             <div class="stat-label">ระดับน้ำที่ชี้เมาส์</div>
-            <div class="stat-val val-focus" id="valHoverLevel">--.-- <span style="font-size: 15px; font-weight: 300;">ซม.</span></div>
+            <div class="stat-val val-focus" id="valHoverLevel">--.-- <span style="font-size: 18px; font-weight: 400;">ซม.</span></div>
         </div>
         <div class="stat-card">
             <div class="stat-label">ระดับน้ำสูงสุดในวัน (Max)</div>
-            <div class="stat-val val-max"><span id="maxVal">0.00</span> <span style="font-size: 15px; font-weight: 300;">ซม.</span></div>
+            <div class="stat-val val-max"><span id="maxVal">0.00</span> <span style="font-size: 18px; font-weight: 400;">ซม.</span></div>
         </div>
         <div class="stat-card">
             <div class="stat-label">ค่าเฉลี่ยทั้งวัน (Daily Avg)</div>
-            <div class="stat-val val-avg"><span id="avgVal">0.00</span> <span style="font-size: 15px; font-weight: 300;">ซม.</span></div>
+            <div class="stat-val val-avg"><span id="avgVal">0.00</span> <span style="font-size: 18px; font-weight: 400;">ซม.</span></div>
         </div>
     </div>
 
@@ -217,7 +224,7 @@
     function initChart() {
         const ctx = document.getElementById('historyChart').getContext('2d');
         
-        const gradient = ctx.createLinearGradient(0, 0, 0, 360);
+        const gradient = ctx.createLinearGradient(0, 0, 0, 380);
         gradient.addColorStop(0, 'rgba(49, 130, 206, 0.22)');
         gradient.addColorStop(1, 'rgba(49, 130, 206, 0.01)');
 
@@ -263,9 +270,9 @@
                             if (val >= 66) { statusText = ' (วิกฤต)'; color = '#e53e3e'; }
                             else if (val >= 56) { statusText = ' (เฝ้าระวัง)'; color = '#dd6b20'; }
 
-                            document.getElementById('valHoverLevel').innerHTML = `<span style="color:${color}">${val.toFixed(2)}</span> <span style="font-size:15px; font-weight:300;">ซม.${statusText}</span>`;
+                            document.getElementById('valHoverLevel').innerHTML = `<span style="color:${color}">${val.toFixed(2)}</span> <span style="font-size:18px; font-weight:400;">ซม.${statusText}</span>`;
                         } else {
-                            document.getElementById('valHoverLevel').innerHTML = `<span style="color:#a0aec0; font-size:16px;">ไม่มีข้อมูล</span>`;
+                            document.getElementById('valHoverLevel').innerHTML = `<span style="color:#a0aec0; font-size:18px;">ไม่มีข้อมูล</span>`;
                         }
                     }
                 },
@@ -273,12 +280,26 @@
                     y: { 
                         min: 0, 
                         max: 75, 
+                        title: {
+                            display: true,
+                            text: 'ระดับน้ำ (เซนติเมตร : cm)',
+                            color: '#2d3748',
+                            font: { size: 15, weight: '500' },
+                            padding: { bottom: 10 }
+                        },
                         grid: { color: '#f0f4f8' }, 
-                        ticks: { color: '#718096', font: { size: 12, weight: '300' } } 
+                        ticks: { color: '#718096', font: { size: 13, weight: '400' } } 
                     },
                     x: { 
+                        title: {
+                            display: true,
+                            text: 'เวลา (ชั่วโมง)',
+                            color: '#2d3748',
+                            font: { size: 15, weight: '500' },
+                            padding: { top: 10 }
+                        },
                         grid: { display: false }, 
-                        ticks: { color: '#718096', maxRotation: 0, font: { size: 11.5, weight: '300' } } 
+                        ticks: { color: '#718096', maxRotation: 0, font: { size: 12, weight: '400' } } 
                     }
                 },
                 plugins: { 
@@ -287,8 +308,8 @@
                         backgroundColor: '#2d3748',
                         titleColor: '#ffffff',
                         bodyColor: '#ffffff',
-                        titleFont: { weight: '500' },
-                        bodyFont: { weight: '300' },
+                        titleFont: { size: 14, weight: '500' },
+                        bodyFont: { size: 13, weight: '400' },
                         padding: 10,
                         cornerRadius: 10,
                         callbacks: {
@@ -310,7 +331,7 @@
             document.getElementById('cardPoint').classList.remove('hover-active');
             document.getElementById('labelPoint').innerText = 'ช่วงเวลาที่เลือก';
             document.getElementById('valPoint').innerText = '24 ชั่วโมง';
-            document.getElementById('valHoverLevel').innerHTML = `--.-- <span style="font-size: 15px; font-weight: 300;">ซม.</span>`;
+            document.getElementById('valHoverLevel').innerHTML = `--.-- <span style="font-size: 18px; font-weight: 400;">ซม.</span>`;
         });
     }
 
