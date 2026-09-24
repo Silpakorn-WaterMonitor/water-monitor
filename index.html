@@ -1,53 +1,478 @@
-// ดึงข้อมูลย้อนหลัง (เช่น 100-200 จุดล่าสุด) จาก ThingSpeak
-const channelID = "ใส่เลข_CHANNEL_ID_ของคุณ";
-const readKey = "ใส่_READ_API_KEY_ถ้ามี"; // ถ้าเป็น Public Channel เว้นว่างหรือใส่แค่ URL ได้
-const url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?results=200`;
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบมอนิเตอร์ระดับน้ำในบ่อแบบเรียลไทม์</title>
+    <!-- Google Fonts: Mitr & Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Mitr', 'Prompt', sans-serif; 
+        }
+        body { 
+            background-color: #f7fafc; 
+            color: #2d3748; 
+            margin: 0; 
+            padding: 24px; 
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
 
-fetch(url)
-  .then(response => response.json())
-  .then(data => {
-    const feeds = data.feeds;
-    if (!feeds || feeds.length === 0) return;
+        /* แถบนำทางด้านบน (เหลือแค่ปุ่มหน้าประวัติ) */
+        .top-nav {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 16px;
+        }
+        .nav-btn {
+            text-decoration: none;
+            background: #ffffff;
+            color: #2b6cb0;
+            border: 1.5px solid #bee3f8;
+            padding: 7px 18px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        }
+        .nav-btn:hover {
+            background: #3182ce;
+            color: #ffffff;
+            border-color: #3182ce;
+            transform: translateY(-1px);
+        }
 
-    // 1. นำค่าล่าสุดไปแสดงในการ์ดระดับน้ำปัจจุบัน
-    const lastFeed = feeds[feeds.length - 1];
-    const currentVal = parseFloat(lastFeed.field1).toFixed(2);
-    document.getElementById("current-water-level").innerText = `${currentVal} ซม.`;
-    // (อัปเดตความสูงแท่งน้ำจำลองตาม currentVal ด้วย)
+        .header-box { 
+            background: #ffffff; 
+            border-radius: 20px; 
+            padding: 22px 28px; 
+            text-align: center;
+            margin-bottom: 20px; 
+            box-shadow: 0 4px 16px rgba(0,0,0,0.03); 
+            border: 1px solid #edf2f7;
+        }
+        .header-box h2 { 
+            margin: 0; 
+            color: #2b6cb0; 
+            font-size: 24px; 
+            font-weight: 500; 
+            letter-spacing: 0.3px;
+        }
+        .header-box p { 
+            margin: 6px 0 0; 
+            color: #a0aec0; 
+            font-size: 14px; 
+            font-weight: 300; 
+        }
 
-    // 2. จัดกลุ่มข้อมูลแยกตามชั่วโมง (เหมือนหน้า history.html)
-    const hourlyGroups = {};
+        /* การ์ดระดับน้ำปัจจุบัน */
+        .current-card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 26px 28px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+            border: 1.5px solid #edf2f7;
+            position: relative; /* เพื่อใช้อ้างอิงตำแหน่งมุมขวาบน */
+        }
 
-    feeds.forEach(item => {
-      if (!item.field1) return;
-      const date = new Date(item.created_at);
-      // สร้าง Key ชั่วโมง เช่น "10:00 น.", "11:00 น."
-      const hourKey = date.getHours().toString().padStart(2, '0') + ":00 น.";
+        /* ป้ายสถานะออนไลน์ / ออฟไลน์ (จัดวางมุมขวาบน) */
+        .status-container {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+        }
+        @media (max-width: 600px) {
+            .status-container {
+                position: static;
+                margin-bottom: 12px;
+            }
+        }
 
-      if (!hourlyGroups[hourKey]) {
-        hourlyGroups[hourKey] = [];
-      }
-      hourlyGroups[hourKey].push(parseFloat(item.field1));
-    });
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 14px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .status-online {
+            background: #e6fffa;
+            color: #234e52;
+            border: 1px solid #b2f5ea;
+        }
+        .status-offline {
+            background: #fff5f5;
+            color: #742a2a;
+            border: 1px solid #fed7d7;
+        }
 
-    // 3. คำนวณค่าเฉลี่ยของแต่ละชั่วโมง
-    const hours = [];
-    const averages = [];
-    const tableData = [];
+        /* จุดไฟสถานะกระพริบ */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-online {
+            background: #38a169;
+            box-shadow: 0 0 0 0 rgba(56, 161, 105, 0.7);
+            animation: pulse-green 1.8s infinite;
+        }
+        .dot-offline {
+            background: #e53e3e;
+        }
 
-    for (const [hour, values] of Object.entries(hourlyGroups)) {
-      const sum = values.reduce((a, b) => a + b, 0);
-      const avg = (sum / values.length).toFixed(2);
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 161, 105, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(56, 161, 105, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 161, 105, 0); }
+        }
 
-      hours.push(hour);
-      averages.push(avg);
-      tableData.push({ hour, avg });
+        .current-card .label {
+            font-size: 15px;
+            color: #718096;
+            margin-bottom: 6px;
+            font-weight: 400;
+        }
+        .current-card .value {
+            font-size: 54px;
+            font-weight: 600;
+            color: #0077cc;
+            line-height: 1.1;
+        }
+        .current-card .unit {
+            font-size: 24px;
+            font-weight: 400;
+        }
+        .current-card .note {
+            font-size: 13px;
+            color: #a0aec0;
+            margin-top: 10px;
+            font-weight: 300;
+        }
+
+        /* กริด 3 คอลัมน์ด้านล่าง */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr 220px;
+            gap: 20px;
+        }
+        @media (max-width: 950px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
+
+        .panel-card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+            border: 1.5px solid #edf2f7;
+        }
+        .panel-card h3 {
+            margin: 0 0 16px;
+            font-size: 15.5px;
+            color: #2d3748;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ตารางเฉลี่ยรายชั่วโมง */
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13.5px;
+            color: #a0aec0;
+            padding-bottom: 8px;
+            border-bottom: 1.5px solid #f0f4f8;
+            font-weight: 400;
+        }
+        .table-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #f7fafc;
+            font-size: 14.5px;
+            font-weight: 500;
+        }
+        .table-row .time { color: #3182ce; }
+        .table-row .val { color: #2b6cb0; }
+
+        /* กราฟ */
+        .chart-container {
+            position: relative;
+            height: 260px;
+            width: 100%;
+        }
+
+        /* กราฟิกบ่อจำลอง */
+        .tank-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 260px;
+        }
+        .tank-outer {
+            width: 90px;
+            height: 200px;
+            border: 3px solid #0077cc;
+            border-top: none;
+            border-radius: 0 0 16px 16px;
+            position: relative;
+            background: #f8fafc;
+            overflow: hidden;
+            display: flex;
+            align-items: flex-end;
+        }
+        .tank-water {
+            width: 100%;
+            height: 50%;
+            background: #0088e6;
+            transition: height 0.6s ease;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tank-text {
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            line-height: 1.2;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- แถบเมนูด้านบน (ปุ่มไปยังหน้าประวัติ) -->
+    <div class="top-nav">
+        <a href="history.html" class="nav-btn">📅 ดูประวัติย้อนหลัง 24 ชม. →</a>
+    </div>
+
+    <div class="header-box">
+        <h2>ระบบวัดระดับน้ำบ่อจำลอง (เรียลไทม์)</h2>
+        <p>คณะวิศวกรรมศาสตร์และเทคโนโลยีอุตสาหกรรม ม.ศิลปากร</p>
+    </div>
+
+    <div class="current-card">
+        <!-- ป้ายสถานะออนไลน์ / ออฟไลน์ อยู่ที่มุมขวาบน -->
+        <div class="status-container">
+            <div id="deviceStatus" class="status-badge status-online">
+                <span id="statusDot" class="status-dot dot-online"></span>
+                <span id="statusText">กำลังตรวจสอบ...</span>
+            </div>
+        </div>
+
+        <div class="label">ระดับน้ำปัจจุบัน (ล่าสุด)</div>
+        <div class="value"><span id="liveVal">--.--</span> <span class="unit">ซม.</span></div>
+        <div class="note">(ระดับน้ำวิกฤตต้องเปิดระบาย: 66.00 ซม.)</div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="panel-card">
+            <h3>📜 เฉลี่ยรายชั่วโมง (8 ชม. ล่าสุด)</h3>
+            <div class="table-header">
+                <span>ชั่วโมง</span>
+                <span>ค่าเฉลี่ย</span>
+            </div>
+            <div id="hourlyTableList">
+                <div style="text-align:center; padding: 20px 0; color:#a0aec0; font-size:13px;">กำลังโหลดข้อมูล...</div>
+            </div>
+        </div>
+
+        <div class="panel-card">
+            <h3>📈 แนวโน้มระดับน้ำ (เฉลี่ยรายชั่วโมง)</h3>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <div class="panel-card">
+            <h3>🌊 ระดับน้ำจำลอง</h3>
+            <div class="tank-wrapper">
+                <div class="tank-outer">
+                    <div class="tank-water" id="tankWater" style="height: 0%;">
+                        <span class="tank-text" id="tankText">0.00<br>ซม.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    Chart.defaults.font.family = "'Mitr', 'Prompt', sans-serif";
+
+    const CHANNEL_ID = '3453778';
+    const MAX_TANK_HEIGHT = 75; // ความลึกบ่อสูงสุด 75 ซม.
+    let trendChart;
+
+    function initTrendChart() {
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+        gradient.addColorStop(0, 'rgba(0, 136, 230, 0.18)');
+        gradient.addColorStop(1, 'rgba(0, 136, 230, 0.01)');
+
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'ระดับน้ำเฉลี่ย (ซม.)',
+                    data: [],
+                    borderColor: '#0088e6',
+                    backgroundColor: gradient,
+                    borderWidth: 2.5,
+                    fill: true,
+                    tension: 0.42,
+                    pointRadius: 4.5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#0088e6',
+                    pointBorderWidth: 2.5,
+                    spanGaps: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#2d3748',
+                        padding: 10,
+                        cornerRadius: 10,
+                        callbacks: {
+                            label: (context) => ` ระดับน้ำเฉลี่ย: ${context.parsed.y} ซม.`
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 75,
+                        grid: { color: '#f0f4f8' },
+                        ticks: { color: '#718096', font: { size: 11 } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#718096', font: { size: 11 } }
+                    }
+                }
+            }
+        });
     }
 
-    // 4. นำ tableData ไปเรนเดอร์ลงในตารางเฉลี่ยรายชั่วโมง (ซ้ายล่าง)
-    renderHourlyTable(tableData);
+    async function fetchDashboardData() {
+        try {
+            const res = await fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/1.json?results=300`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const feeds = data.feeds;
+            if (!feeds || feeds.length === 0) return;
 
-    // 5. นำ hours และ averages ไปอัปเดตกราฟ Chart.js (ตรงกลาง)
-    updateChart(hours, averages);
-  })
-  .catch(err => console.error("Error loading data:", err));
+            // 1. ตรวจสอบสถานะออนไลน์ / ออฟไลน์ ของอุปกรณ์
+            const latestFeed = feeds[feeds.length - 1];
+            if (latestFeed && latestFeed.created_at) {
+                const lastTime = new Date(latestFeed.created_at).getTime();
+                const nowTime = new Date().getTime();
+                const diffMinutes = Math.floor((nowTime - lastTime) / (1000 * 60));
+
+                const statusBadge = document.getElementById('deviceStatus');
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+
+                if (diffMinutes <= 3) {
+                    statusBadge.className = 'status-badge status-online';
+                    statusDot.className = 'status-dot dot-online';
+                    statusText.innerText = 'ออนไลน์';
+                } else {
+                    statusBadge.className = 'status-badge status-offline';
+                    statusDot.className = 'status-dot dot-offline';
+                    if (diffMinutes < 60) {
+                        statusText.innerText = `ออฟไลน์ (${diffMinutes} น. ที่แล้ว)`;
+                    } else {
+                        const diffHours = Math.floor(diffMinutes / 60);
+                        statusText.innerText = `ออฟไลน์ (${diffHours} ชม. ที่แล้ว)`;
+                    }
+                }
+            }
+
+            // 2. ระดับน้ำปัจจุบัน (ล่าสุด)
+            if (latestFeed && latestFeed.field1) {
+                const live = parseFloat(latestFeed.field1);
+                document.getElementById('liveVal').innerText = live.toFixed(2);
+                
+                // อัปเดตบ่อจำลอง
+                const waterPercent = Math.min(100, Math.max(0, (live / MAX_TANK_HEIGHT) * 100));
+                document.getElementById('tankWater').style.height = `${waterPercent}%`;
+                document.getElementById('tankText').innerHTML = `${live.toFixed(2)}<br>ซม.`;
+            }
+
+            // 3. จัดกลุ่มเฉลี่ยรายชั่วโมง
+            const hourlyGroups = {};
+            feeds.forEach(f => {
+                if (f.field1) {
+                    const d = new Date(f.created_at);
+                    const timeKey = `${String(d.getHours()).padStart(2, '0')}:00`;
+                    if (!hourlyGroups[timeKey]) hourlyGroups[timeKey] = [];
+                    hourlyGroups[timeKey].push(parseFloat(f.field1));
+                }
+            });
+
+            const hourLabels = Object.keys(hourlyGroups);
+            const hourValues = hourLabels.map(k => {
+                const arr = hourlyGroups[k];
+                return parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2));
+            });
+
+            trendChart.data.labels = hourLabels;
+            trendChart.data.datasets[0].data = hourValues;
+            trendChart.update();
+
+            // 4. แสดงตารางเฉลี่ย 8 แถวล่าสุด
+            const lastHours = hourLabels.slice(-8).reverse();
+            let tableHtml = '';
+            lastHours.forEach(h => {
+                const arr = hourlyGroups[h];
+                const avg = (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2);
+                tableHtml += `
+                    <div class="table-row">
+                        <span class="time">${h} น.</span>
+                        <span class="val">${avg} ซม.</span>
+                    </div>
+                `;
+            });
+            document.getElementById('hourlyTableList').innerHTML = tableHtml || '<div style="text-align:center; padding: 20px 0; color:#a0aec0;">ไม่มีข้อมูล</div>';
+
+        } catch (err) {
+            console.error("Dashboard fetch error:", err);
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        initTrendChart();
+        fetchDashboardData();
+        setInterval(fetchDashboardData, 15000); // เช็กสถานะและอัปเดตทุก 15 วินาที
+    });
+</script>
+</body>
+</html>
